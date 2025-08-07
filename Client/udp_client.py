@@ -64,12 +64,22 @@ def start_udp_client():
                 continue
             
             # Send message to server
-            client_socket.sendto(message.encode('utf-8'), (SERVER_HOST, SERVER_PORT))
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{current_time}] Sent: {message}")
+            try:
+                client_socket.sendto(message.encode('utf-8'), (SERVER_HOST, SERVER_PORT))
+                current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{current_time}] Sent: {message}")
+            except OSError as e:
+                if hasattr(e, 'winerror') and e.winerror == 10054:
+                    print(f"[{current_time}] Server connection lost (Error 10054)")
+                    print("The server may have been closed or is unreachable.")
+                    break
+                else:
+                    print(f"[{current_time}] Error sending message: {e}")
+                    continue
             
             # Receive reply from server
             try:
+                client_socket.settimeout(5.0)  # 5 second timeout
                 reply, server_address = client_socket.recvfrom(1024)  # Buffer size of 1024 bytes
                 reply_message = reply.decode('utf-8')
                 print(f"[{current_time}] Server reply: {reply_message}")
@@ -82,8 +92,18 @@ def start_udp_client():
                     
             except socket.timeout:
                 print("No response from server (timeout)")
+                print("Server might be busy or unreachable. Try again.")
+            except OSError as e:
+                if hasattr(e, 'winerror') and e.winerror == 10054:
+                    print("Server closed the connection (Error 10054)")
+                    print("The server may have shut down.")
+                    break
+                else:
+                    print(f"Error receiving reply: {e}")
+            except UnicodeDecodeError:
+                print("Received invalid data from server")
             except Exception as e:
-                print(f"Error receiving reply: {e}")
+                print(f"Unexpected error: {e}")
                 
     except KeyboardInterrupt:
         print("\nClient interrupted by user. Shutting down...")
